@@ -161,15 +161,8 @@ def analyze_range(df, start_range, end_range, is_skat=False):
     # Определяем количество колонок для анализа
     cols_to_analyze = 5 if is_skat else 6
 
-    results = {
-        "total_count": 0,
-        "doubled_count": 0,
-        "quadrupled_count": 0,
-        "difference_groups": {},
-        "mirror_numbers": [],
-        "special_numbers": [],  # Для режима СКАТ
-    }
-
+    # Подсчет всех чисел
+    number_counts = {}
     special_numbers = [11, 22, 33, 44, 55, 66, 77]
 
     for _, row in df_filtered.iterrows():
@@ -178,32 +171,75 @@ def analyze_range(df, start_range, end_range, is_skat=False):
                 try:
                     value = int(row[col_idx])
                     if 10 <= value <= 99:  # Двузначное число
-                        results["total_count"] += 1
-
-                        # Проверка на специальные числа в режиме СКАТ
-                        if is_skat and value in special_numbers:
-                            results["quadrupled_count"] += 4
-                            results["special_numbers"].append(value)
-                        else:
-                            results["doubled_count"] += 2
-
-                        # Группировка по разности цифр
-                        diff = calculate_digit_difference(value)
-                        if diff is not None:
-                            if diff not in results["difference_groups"]:
-                                results["difference_groups"][diff] = []
-                            results["difference_groups"][diff].append(value)
-
-                        # Поиск зеркальных чисел
-                        if is_mirror_number(value):
-                            results["mirror_numbers"].append(value)
+                        if value not in number_counts:
+                            number_counts[value] = 0
+                        number_counts[value] += 1
                 except:
                     continue
 
-    return results, None
+    # Группировка по штампам (разности цифр)
+    stamps = {}
+    for number, count in number_counts.items():
+        diff = calculate_digit_difference(number)
+        if diff is not None:
+            if diff not in stamps:
+                stamps[diff] = {}
+
+            # Применяем множители
+            if is_skat and number in special_numbers:
+                display_count = count * 4
+            else:
+                display_count = count * 2
+
+            stamps[diff][number] = display_count
+
+    return stamps, None
 
 
-def format_results_for_copy(results, is_skat=False):
+def get_mirror_pair(number):
+    """Получение зеркального числа"""
+    num_str = str(number)
+    if len(num_str) == 2:
+        return int(num_str[1] + num_str[0])
+    return None
+
+
+def format_stamp_display(stamp_data):
+    """Форматирование данных штампа для отображения"""
+    if not stamp_data:
+        return []
+
+    processed_numbers = set()
+    lines = []
+
+    # Сортируем числа по возрастанию
+    for number in sorted(stamp_data.keys()):
+        if number in processed_numbers:
+            continue
+
+        count = stamp_data[number]
+        mirror = get_mirror_pair(number)
+
+        # Проверяем, есть ли зеркальная пара и не является ли число само себе зеркальным
+        if (
+            mirror
+            and mirror != number
+            and mirror in stamp_data
+            and mirror not in processed_numbers
+        ):
+
+            mirror_count = stamp_data[mirror]
+            lines.append(f"{number} ({count}шт) ⇄ {mirror} ({mirror_count}шт)")
+            processed_numbers.add(number)
+            processed_numbers.add(mirror)
+        else:
+            lines.append(f"{number} ({count}шт)")
+            processed_numbers.add(number)
+
+    return lines
+
+
+def format_results_for_copy(stamps, is_skat=False):
     """Форматирование результатов для копирования"""
     text = []
     text.append("=== РЕЗУЛЬТАТЫ АНАЛИЗА ===")
@@ -213,32 +249,17 @@ def format_results_for_copy(results, is_skat=False):
     text.append(f"Режим: {mode}")
     text.append("")
 
-    text.append(f"Общее количество чисел: {results['total_count']}")
+    # Сортируем штампы по номеру
+    for stamp_num in sorted(stamps.keys()):
+        stamp_data = stamps[stamp_num]
+        if stamp_data:  # Если в штампе есть данные
+            text.append(f"Штамп: {stamp_num}")
+            lines = format_stamp_display(stamp_data)
+            for line in lines:
+                text.append(line)
+            text.append("")
 
-    if is_skat and results["quadrupled_count"] > 0:
-        text.append(f"Удвоенное количество: {results['doubled_count']}")
-        text.append(f"Учетверенное количество: {results['quadrupled_count']}")
-        text.append(f"Итого: {results['doubled_count'] + results['quadrupled_count']}")
-        if results["special_numbers"]:
-            special_count = Counter(results["special_numbers"])
-            text.append(f"Специальные числа (x4): {dict(special_count)}")
-    else:
-        text.append(f"Удвоенное количество: {results['doubled_count']}")
-
-    text.append("")
-    text.append("ГРУППИРОВКА ПО РАЗНОСТИ ЦИФР:")
-    for diff in sorted(results["difference_groups"].keys()):
-        numbers = results["difference_groups"][diff]
-        count = Counter(numbers)
-        text.append(f"Разность {diff}: {dict(count)}")
-
-    if results["mirror_numbers"]:
-        text.append("")
-        text.append("ЗЕРКАЛЬНЫЕ ЧИСЛА:")
-        mirror_count = Counter(results["mirror_numbers"])
-        text.append(f"{dict(mirror_count)}")
-
-    return "\n".join(text)
+    return "\n".join(text).rstrip()
 
 
 def main():
@@ -286,62 +307,40 @@ def main():
         if st.button("🔍 Анализировать диапазон", type="primary"):
             if start_range and end_range:
                 with st.spinner("Анализ данных..."):
-                    results, error = analyze_range(df, start_range, end_range, is_skat)
+                    stamps, error = analyze_range(df, start_range, end_range, is_skat)
 
                 if error:
                     st.error(f"❌ {error}")
                 else:
                     st.success("✅ Анализ завершен")
 
-                    # Отображение результатов
-                    st.subheader("📈 Результаты")
+                    # Отображение результатов по штампам
+                    st.subheader("📈 Результаты по штампам")
 
-                    col_res1, col_res2, col_res3 = st.columns(3)
-
-                    with col_res1:
-                        st.metric("Общее количество", results["total_count"])
-
-                    with col_res2:
-                        if is_skat and results["quadrupled_count"] > 0:
-                            total = (
-                                results["doubled_count"] + results["quadrupled_count"]
-                            )
-                            st.metric("Итого (x2 + x4)", total)
-                        else:
-                            st.metric("Удвоенное количество", results["doubled_count"])
-
-                    with col_res3:
-                        if is_skat and results["quadrupled_count"] > 0:
-                            st.metric("Учетверенное", results["quadrupled_count"])
-
-                    # Группировка по разности цифр
-                    if results["difference_groups"]:
-                        st.subheader("📋 Группировка по разности цифр")
-                        for diff in sorted(results["difference_groups"].keys()):
-                            numbers = results["difference_groups"][diff]
-                            count = Counter(numbers)
-                            st.write(f"**Разность {diff}:** {dict(count)}")
-
-                    # Зеркальные числа
-                    if results["mirror_numbers"]:
-                        st.subheader("🪞 Зеркальные числа")
-                        mirror_count = Counter(results["mirror_numbers"])
-                        st.write(dict(mirror_count))
-
-                    # Специальные числа для режима СКАТ
-                    if is_skat and results["special_numbers"]:
-                        st.subheader("⭐ Специальные числа (x4)")
-                        special_count = Counter(results["special_numbers"])
-                        st.write(dict(special_count))
+                    # Сортируем штампы по номеру
+                    for stamp_num in sorted(stamps.keys()):
+                        stamp_data = stamps[stamp_num]
+                        if stamp_data:  # Если в штампе есть данные
+                            st.write(f"**Штамп: {stamp_num}**")
+                            lines = format_stamp_display(stamp_data)
+                            for line in lines:
+                                st.write(line)
+                            st.write("")  # Пустая строка между штампами
 
                     # Кнопка копирования
-                    formatted_text = format_results_for_copy(results, is_skat)
+                    formatted_text = format_results_for_copy(stamps, is_skat)
 
                     # JavaScript для копирования в буфер обмена
+                    escaped_text = (
+                        formatted_text.replace("\\", "\\\\")
+                        .replace("`", "\\`")
+                        .replace("\n", "\\n")
+                        .replace("\r", "\\r")
+                    )
                     copy_script = f"""
                     <script>
                     function copyToClipboard() {{
-                        const text = `{formatted_text.replace('`', '\\`')}`;
+                        const text = `{escaped_text}`;
                         if (navigator.clipboard && navigator.clipboard.writeText) {{
                             navigator.clipboard.writeText(text).then(function() {{
                                 alert('Результаты скопированы в буфер обмена!');
