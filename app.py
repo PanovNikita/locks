@@ -179,9 +179,7 @@ def analyze_range(df, start_range, end_range, is_skat=False):
                         # В режиме СКАТ добавляем зеркальное число
                         if is_skat:
                             mirror_value = get_mirror_pair(value)
-                            if (
-                                mirror_value and mirror_value != value
-                            ):  # Если зеркальное число отличается
+                            if mirror_value:  # Убираем проверку на отличие от исходного
                                 if mirror_value not in number_counts:
                                     number_counts[mirror_value] = 0
                                 number_counts[mirror_value] += 1
