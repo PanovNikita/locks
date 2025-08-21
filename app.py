@@ -171,9 +171,20 @@ def analyze_range(df, start_range, end_range, is_skat=False):
                 try:
                     value = int(row[col_idx])
                     if 10 <= value <= 99:  # Двузначное число
+                        # Добавляем исходное число
                         if value not in number_counts:
                             number_counts[value] = 0
                         number_counts[value] += 1
+
+                        # В режиме СКАТ добавляем зеркальное число
+                        if is_skat:
+                            mirror_value = get_mirror_pair(value)
+                            if (
+                                mirror_value and mirror_value != value
+                            ):  # Если зеркальное число отличается
+                                if mirror_value not in number_counts:
+                                    number_counts[mirror_value] = 0
+                                number_counts[mirror_value] += 1
                 except:
                     continue
 
@@ -187,9 +198,11 @@ def analyze_range(df, start_range, end_range, is_skat=False):
 
             # Применяем множители
             if is_skat and number in special_numbers:
-                display_count = count * 4
+                # Специальные числа в режиме СКАТ: они сами себе зеркальные,
+                # поэтому удваиваются при зеркалировании, затем еще ×2 = итого ×4
+                display_count = count * 2  # Уже удвоены при зеркалировании, еще ×2
             else:
-                display_count = count * 2
+                display_count = count * 2  # Обычное удвоение
 
             stamps[diff][number] = display_count
 
