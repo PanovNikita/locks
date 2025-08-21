@@ -196,13 +196,9 @@ def analyze_range(df, start_range, end_range, is_skat=False):
             if diff not in stamps:
                 stamps[diff] = {}
 
-            # Применяем множители
-            if is_skat and number in special_numbers:
-                # Специальные числа в режиме СКАТ: они сами себе зеркальные,
-                # поэтому удваиваются при зеркалировании, затем еще ×2 = итого ×4
-                display_count = count * 2  # Уже удвоены при зеркалировании, еще ×2
-            else:
-                display_count = count * 2  # Обычное удвоение
+            # В режиме СКАТ все числа умножаются на 2 (зеркалирование уже учтено)
+            # В обычном режиме тоже все числа умножаются на 2
+            display_count = count * 2
 
             stamps[diff][number] = display_count
 
